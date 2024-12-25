@@ -2102,12 +2102,15 @@ ntp_archiver::schedule_uploads(std::vector<upload_context> loop_contexts) {
     co_return scheduled_uploads;
 }
 
-ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
-  archival_stm_fence fence,
+ss::future<ntp_archiver::wait_uploads_complete_result>
+ntp_archiver::wait_uploads_complete(
   std::vector<scheduled_upload> scheduled,
   segment_upload_kind segment_kind,
   bool inline_manifest) {
-    ntp_archiver::upload_group_result total{};
+    wait_uploads_complete_result result{
+      .inline_manifest = inline_manifest,
+    };
+
     std::vector<ss::future<ntp_archiver_upload_result>> flist;
     std::vector<size_t> ixupload;
     for (size_t ix = 0; ix < scheduled.size(); ix++) {
@@ -2116,20 +2119,15 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
             ixupload.push_back(ix);
         }
     }
+
     if (flist.empty()) {
         vlog(
           _rtclog.debug,
           "no uploads started for segment upload kind: {}, returning",
           segment_kind);
-        co_return total;
+        // The result is empty at this point
+        co_return result;
     }
-
-    // Remember if we started with a clean STM: this will be used to decide
-    // whether to maybe do an extra flush of manifest after upload, to get back
-    // into a clean state.
-    auto stm_was_clean = _parent.archival_meta_stm()->get_dirty(
-                           _projected_manifest_clean_at)
-                         == cluster::archival_metadata_stm::state_dirty::clean;
 
     // We may upload manifest in parallel with segments when using time-based
     // (interval) manifest uploads.  If we aren't using an interval, then the
@@ -2156,6 +2154,11 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
     if (upload_manifest_in_parallel) {
         // Drop the upload_result from manifest upload, we do not want to
         // count it in the subsequent success/failure counts.
+        // The actual progress of the manifest uploads is tracked inside the
+        // 'maybe_upload_manifest' method. The method updates projected clean
+        // offset upon success. Later this value is used to replicate
+        // 'mark_clean' command so we don't need to propagate the actual error
+        // code.
         segment_results.pop_back();
     }
 
@@ -2163,7 +2166,7 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
         // We exit early even if we have successfully uploaded some segments to
         // avoid interfering with an archiver that could have started on another
         // node.
-        co_return upload_group_result{};
+        co_return wait_uploads_complete_result{};
     }
 
     absl::flat_hash_map<cloud_storage::upload_result, size_t> upload_results;
@@ -2171,17 +2174,17 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
         ++upload_results[result.result()];
     }
 
-    total.num_succeeded = upload_results[cloud_storage::upload_result::success];
-    total.num_cancelled
+    result.num_succeeded
+      = upload_results[cloud_storage::upload_result::success];
+    result.num_cancelled
       = upload_results[cloud_storage::upload_result::cancelled];
-    total.num_failed = segment_results.size()
-                       - (total.num_succeeded + total.num_cancelled);
+    result.num_failed = segment_results.size()
+                        - (result.num_succeeded + result.num_cancelled);
 
-    std::vector<cloud_storage::segment_meta> mdiff;
-    const bool checks_disabled
+    result.checks_disabled
       = config::shard_local_cfg()
           .cloud_storage_disable_upload_consistency_checks.value();
-    if (!checks_disabled) {
+    if (!result.checks_disabled) {
         // With read-write-fence it's guaranteed that the concurrent
         // updates are not a problem. But we still need this check
         // to prevent certain bugs from corrupting the cloud storage
@@ -2227,7 +2230,7 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
             break;
         }
         const auto& upload = scheduled[ixupload[i]];
-        if (!checks_disabled && segment_results[i].has_record_stats()) {
+        if (!result.checks_disabled && segment_results[i].has_record_stats()) {
             // Validate metadata by comparing it to the segment stats
             // generated during index building process. The stats contains
             // "ground truth" about the uploaded segment because the code that
@@ -2260,10 +2263,39 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
             }
         }
 
-        mdiff.push_back(*upload.meta);
+        result.meta.push_back(*upload.meta);
+    }
+    co_return result;
+}
+
+/// Replicate archival metadata
+ss::future<ntp_archiver::upload_group_result>
+ntp_archiver::replicate_archival_metadata(
+  archival_stm_fence fence,
+  std::vector<wait_uploads_complete_result> finished_uploads) {
+    upload_group_result total{};
+    std::vector<cloud_storage::segment_meta> meta;
+    bool checks_disabled = true;
+    bool inline_manifest = false;
+    for (const auto& it : finished_uploads) {
+        total.num_cancelled += it.num_cancelled;
+        total.num_failed += it.num_failed;
+        total.num_succeeded += it.num_succeeded;
+        for (const auto& s : it.meta) {
+            meta.emplace_back(s);
+        }
+        checks_disabled = checks_disabled && it.checks_disabled;
+        inline_manifest = inline_manifest || it.inline_manifest;
     }
 
-    if (mdiff.empty()) {
+    // Remember if we started with a clean STM: this will be used to decide
+    // whether to maybe do an extra flush of manifest after upload, to get back
+    // into a clean state.
+    auto stm_was_clean = _parent.archival_meta_stm()->get_dirty(
+                           _projected_manifest_clean_at)
+                         == cluster::archival_metadata_stm::state_dirty::clean;
+
+    if (meta.empty()) {
         vlog(_rtclog.debug, "No upload metadata collected, returning early");
         co_return total;
     }
@@ -2311,7 +2343,7 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
             batch_builder.read_write_fence(fence.read_write_fence);
         }
         batch_builder.add_segments(
-          mdiff,
+          meta,
           checks_disabled ? cluster::segment_validated::no
                           : cluster::segment_validated::yes);
         if (manifest_clean_offset.has_value()) {
@@ -2357,6 +2389,17 @@ ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
     }
 
     co_return total;
+}
+
+ss::future<ntp_archiver::upload_group_result> ntp_archiver::wait_uploads(
+  archival_stm_fence fence,
+  std::vector<scheduled_upload> scheduled,
+  segment_upload_kind segment_kind,
+  bool inline_manifest) {
+    auto wait_result = co_await wait_uploads_complete(
+      std::move(scheduled), segment_kind, inline_manifest);
+    co_return co_await replicate_archival_metadata(
+      fence, {std::move(wait_result)});
 }
 
 ss::future<ntp_archiver::batch_result> ntp_archiver::wait_all_scheduled_uploads(

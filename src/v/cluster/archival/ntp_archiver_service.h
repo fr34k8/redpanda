@@ -525,7 +525,33 @@ private:
       archival_stm_fence fence,
       std::vector<scheduled_upload> scheduled,
       segment_upload_kind segment_kind,
+      bool inline_manifest); // TODO: remove
+
+    struct wait_uploads_complete_result {
+        // It's fine to have a vector here. We're never uploading
+        // more than a handful of segments at a time.
+        std::vector<cloud_storage::segment_meta> meta;
+        size_t num_succeeded{0};
+        size_t num_failed{0};
+        size_t num_cancelled{0};
+        bool checks_disabled{false};
+        bool inline_manifest{false};
+    };
+    /// Waits for scheduled segment uploads. The uploaded segments could be
+    /// compacted or non-compacted, the actions taken are similar in both
+    /// cases with the major difference being the probe updates done after
+    /// the upload.
+    /// The archival metadata is not replicated. The result of this operation
+    /// should be used to invoke 'replicate_archival_metadata' method.
+    ss::future<wait_uploads_complete_result> wait_uploads_complete(
+      std::vector<scheduled_upload> scheduled,
+      segment_upload_kind segment_kind,
       bool inline_manifest);
+
+    /// Replicate archival metadata
+    ss::future<ntp_archiver::upload_group_result> replicate_archival_metadata(
+      archival_stm_fence fence,
+      std::vector<wait_uploads_complete_result> finished_uploads);
 
     /// Upload individual segment to S3.
     ///
