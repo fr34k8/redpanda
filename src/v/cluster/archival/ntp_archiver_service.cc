@@ -2441,30 +2441,39 @@ ss::future<ntp_archiver::batch_result> ntp_archiver::wait_all_scheduled_uploads(
 
     auto [non_compacted_result, compacted_result]
       = co_await ss::when_all_succeed(
-        wait_uploads(
-          fence,
+        wait_uploads_complete(
           std::move(non_compacted_uploads),
           segment_upload_kind::non_compacted,
           inline_manifest_in_non_compacted_uploads),
-        wait_uploads(
-          fence,
+        wait_uploads_complete(
           std::move(compacted_uploads),
           segment_upload_kind::compacted,
           !inline_manifest_in_non_compacted_uploads));
 
-    auto total_successful_uploads = non_compacted_result.num_succeeded
-                                    + compacted_result.num_succeeded;
-    if (total_successful_uploads > 0) {
+    // Replicate the metadata
+    auto final_result = co_await replicate_archival_metadata(
+      fence, {non_compacted_result, compacted_result});
+
+    if (final_result.num_succeeded > 0) {
         _last_segment_upload_time = ss::lowres_clock::now();
     }
     vlog(
       _rtclog.trace,
       "Segment uploads complete: {} successful uploads",
-      total_successful_uploads);
+      final_result.num_succeeded);
 
     co_return batch_result{
-      .non_compacted_upload_result = non_compacted_result,
-      .compacted_upload_result = compacted_result};
+      .non_compacted_upload_result = {
+        .num_succeeded = non_compacted_result.num_succeeded,
+        .num_failed = non_compacted_result.num_failed,
+        .num_cancelled = non_compacted_result.num_cancelled,
+      },
+      .compacted_upload_result = {
+        .num_succeeded = compacted_result.num_succeeded,
+        .num_failed = compacted_result.num_failed,
+        .num_cancelled = compacted_result.num_cancelled,
+      },
+      };
 }
 
 model::offset ntp_archiver::max_uploadable_offset_exclusive() const {
