@@ -405,7 +405,8 @@ FIXTURE_TEST(
 
     retry_chain_node fib(never_abort);
     auto res = archiver
-                 .upload_next_candidates(archival_stm_fence{.unsafe_add = true})
+                 .upload_next_candidates(
+                   archival_stm_fence{.emit_rw_fence_cmd = false})
                  .get();
 
     auto&& [non_compacted_result, compacted_result] = res;

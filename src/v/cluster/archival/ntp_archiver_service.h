@@ -121,8 +121,8 @@ struct archival_stm_fence {
     // Offset of the last command added to the
     // archival STM
     model::offset read_write_fence;
-    // Disable fencing in tests
-    bool unsafe_add{false};
+    // Use read-write fence when replicating commands
+    bool emit_rw_fence_cmd{true};
 };
 
 /// This class performs per-ntp archival workload. Every ntp can be

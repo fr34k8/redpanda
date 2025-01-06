@@ -775,7 +775,7 @@ ss::future<> ntp_archiver::upload_until_term_change_legacy() {
             .read_write_fence = fence,
             // Only use the rw-fence if the feature is enabled which requires
             // major version upgrade.
-            .unsafe_add = !_feature_table.local().is_active(
+            .emit_rw_fence_cmd = _feature_table.local().is_active(
               features::feature::cloud_storage_metadata_rw_fence),
           });
         if (non_compacted_upload_result.num_failed != 0) {
@@ -2328,17 +2328,16 @@ ntp_archiver::replicate_archival_metadata(
         auto is_validated = checks_disabled ? cluster::segment_validated::no
                                             : cluster::segment_validated::yes;
         cluster::emit_read_write_fence rw_fence = std::nullopt;
-        if (!fence.unsafe_add) {
+        if (fence.emit_rw_fence_cmd) {
             // The fence should be added first because it can only
             // affect commands which are following it in the same record
             // batch.
             vlog(
               archival_log.debug,
-              "add_segments, read-write fence: {}, unsafe add: {}, manifest "
+              "add_segments, read-write fence: {}, manifest "
               "last "
               "applied offset: {}, manifest in-sync offset: {}",
               fence.read_write_fence,
-              fence.unsafe_add,
               _parent.archival_meta_stm()->manifest().get_applied_offset(),
               _parent.archival_meta_stm()->get_insync_offset());
             rw_fence = fence.read_write_fence;
@@ -2693,7 +2692,7 @@ ss::future<> ntp_archiver::apply_archive_retention() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .unsafe_add = !_feature_table.local().is_active(
+      .emit_rw_fence_cmd = _feature_table.local().is_active(
         features::feature::cloud_storage_metadata_rw_fence),
     };
 
@@ -2733,7 +2732,7 @@ ss::future<> ntp_archiver::apply_archive_retention() {
     auto deadline = ss::lowres_clock::now() + sync_timeout;
 
     auto batch = _parent.archival_meta_stm()->batch_start(deadline, _as);
-    if (!fence.unsafe_add) {
+    if (fence.emit_rw_fence_cmd) {
         vlog(
           _rtclog.debug,
           "truncate_archive_init, read-write fence: {}",
@@ -2766,7 +2765,7 @@ ss::future<> ntp_archiver::garbage_collect_archive() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .unsafe_add = !_feature_table.local().is_active(
+      .emit_rw_fence_cmd = _feature_table.local().is_active(
         features::feature::cloud_storage_metadata_rw_fence),
     };
     auto backlog = co_await _manifest_view->get_retention_backlog();
@@ -2952,7 +2951,7 @@ ss::future<> ntp_archiver::garbage_collect_archive() {
                               .cloud_storage_metadata_sync_timeout_ms.value();
         auto deadline = ss::lowres_clock::now() + sync_timeout;
         auto builder = _parent.archival_meta_stm()->batch_start(deadline, _as);
-        if (!fence.unsafe_add) {
+        if (fence.emit_rw_fence_cmd) {
             vlog(
               _rtclog.debug,
               "cleanup_archive, read-write fence: {}",
@@ -3218,7 +3217,7 @@ ss::future<> ntp_archiver::apply_retention() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .unsafe_add = !_feature_table.local().is_active(
+      .emit_rw_fence_cmd = _feature_table.local().is_active(
         features::feature::cloud_storage_metadata_rw_fence),
     };
     auto arch_so = manifest().get_archive_start_offset();
@@ -3269,7 +3268,7 @@ ss::future<> ntp_archiver::apply_retention() {
         auto deadline = ss::lowres_clock::now() + sync_timeout;
 
         auto builder = _parent.archival_meta_stm()->batch_start(deadline, _as);
-        if (!fence.unsafe_add) {
+        if (fence.emit_rw_fence_cmd) {
             // Currently, the 'unsafe_add' is always set to 'false'
             // because the fence is generated inside this method. It's still
             // good to have this condition in case if this will be changed.
@@ -3316,7 +3315,7 @@ ss::future<> ntp_archiver::garbage_collect() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .unsafe_add = !_feature_table.local().is_active(
+      .emit_rw_fence_cmd = _feature_table.local().is_active(
         features::feature::cloud_storage_metadata_rw_fence),
     };
 
@@ -3382,7 +3381,7 @@ ss::future<> ntp_archiver::garbage_collect() {
         auto deadline = ss::lowres_clock::now() + sync_timeout;
 
         auto builder = _parent.archival_meta_stm()->batch_start(deadline, _as);
-        if (!fence.unsafe_add) {
+        if (fence.emit_rw_fence_cmd) {
             vlog(
               _rtclog.debug,
               "cleanup_metadata, read-write fence: {}",
@@ -3444,7 +3443,7 @@ ntp_archiver::find_reupload_candidate(manifest_scanner_t scanner) {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .unsafe_add = !_feature_table.local().is_active(
+      .emit_rw_fence_cmd = _feature_table.local().is_active(
         features::feature::cloud_storage_metadata_rw_fence),
     };
     if (!may_begin_uploads()) {
@@ -3686,13 +3685,12 @@ ss::future<bool> ntp_archiver::do_upload_local(
     auto is_validated = checks_disabled ? cluster::segment_validated::no
                                         : cluster::segment_validated::yes;
     cluster::emit_read_write_fence rw_fence = std::nullopt;
-    if (!fence.unsafe_add) {
+    if (fence.emit_rw_fence_cmd) {
         vlog(
           archival_log.debug,
-          "(2) fence value is: {}, unsafe add: {}, manifest last applied "
+          "(2) fence value is: {}, manifest last applied "
           "offset: {}, manifest in-sync offset: {}",
           fence.read_write_fence,
-          fence.unsafe_add,
           _parent.archival_meta_stm()->manifest().get_applied_offset(),
           _parent.archival_meta_stm()->get_insync_offset());
         rw_fence = fence.read_write_fence;

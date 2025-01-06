@@ -419,7 +419,7 @@ FIXTURE_TEST(
         BOOST_REQUIRE_EQUAL(
           archiver
             ->upload_next_candidates(
-              archival::archival_stm_fence{.unsafe_add = true})
+              archival::archival_stm_fence{.emit_rw_fence_cmd = false})
             .get()
             .non_compacted_upload_result.num_failed,
           0);
@@ -501,7 +501,7 @@ FIXTURE_TEST(test_delete_from_stm_truncation, delete_records_e2e_fixture) {
     BOOST_REQUIRE_EQUAL(
       archiver
         ->upload_next_candidates(
-          archival::archival_stm_fence{.unsafe_add = true})
+          archival::archival_stm_fence{.emit_rw_fence_cmd = false})
         .get()
         .non_compacted_upload_result.num_failed,
       0);

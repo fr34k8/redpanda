@@ -249,7 +249,7 @@ TEST_P(EndToEndFixture, TestProduceConsumeFromCloudWithSpillover) {
         ASSERT_TRUE(archiver.sync_for_tests().get());
         archiver
           .upload_next_candidates(
-            archival::archival_stm_fence{.unsafe_add = true})
+            archival::archival_stm_fence{.emit_rw_fence_cmd = false})
           .get();
     }
     ASSERT_EQ(
@@ -742,7 +742,7 @@ TEST_F(CloudStorageManualMultiNodeTestBase, ReclaimableReportedInHealthReport) {
         archiver.sync_for_tests().get();
         archiver
           .upload_next_candidates(
-            archival::archival_stm_fence{.unsafe_add = true})
+            archival::archival_stm_fence{.emit_rw_fence_cmd = false})
           .get();
 
         // not for synchronization... just to give the system time to propogate

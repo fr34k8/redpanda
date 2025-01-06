@@ -121,8 +121,8 @@ TEST_F(TopicRecoveryFixture, TestTopicNamespaceOverrideRecovery) {
         // Sync archiver, upload candidates (if needed) and upload manifest.
         archiver.sync_for_tests().get();
         std::ignore = archiver
-                        .upload_next_candidates(
-                          archival::archival_stm_fence{.unsafe_add = true})
+                        .upload_next_candidates(archival::archival_stm_fence{
+                          .emit_rw_fence_cmd = false})
                         .get();
         archiver.upload_topic_manifest().get();
     }
@@ -193,7 +193,7 @@ TEST_F(TopicRecoveryFixture, TestTopicNamespaceOverrideRecovery) {
     archiver.sync_for_tests().get();
     std::ignore = archiver
                     .upload_next_candidates(
-                      archival::archival_stm_fence{.unsafe_add = true})
+                      archival::archival_stm_fence{.emit_rw_fence_cmd = false})
                     .get();
 
     // Check requests with the same predicate at end of scope, just to be

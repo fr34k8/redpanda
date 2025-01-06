@@ -182,7 +182,7 @@ TEST_P(ClusterRecoveryBackendLeadershipParamTest, TestRecoveryControllerState) {
         archiver.sync_for_tests().get();
         auto res = archiver
                      .upload_next_candidates(
-                       archival::archival_stm_fence{.unsafe_add = true})
+                       archival::archival_stm_fence{.emit_rw_fence_cmd = false})
                      .get();
         ASSERT_GT(res.non_compacted_upload_result.num_succeeded, 0);
         archiver.upload_topic_manifest().get();
