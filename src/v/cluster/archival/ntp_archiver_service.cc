@@ -2325,8 +2325,9 @@ ntp_archiver::replicate_archival_metadata(
               ? _parent.highest_producer_id()
               : model::producer_id{};
 
-        auto batch_builder = _parent.archival_meta_stm()->batch_start(
-          deadline, _as);
+        auto is_validated = checks_disabled ? cluster::segment_validated::no
+                                            : cluster::segment_validated::yes;
+        cluster::emit_read_write_fence rw_fence = std::nullopt;
         if (!fence.unsafe_add) {
             // The fence should be added first because it can only
             // affect commands which are following it in the same record
@@ -2340,18 +2341,16 @@ ntp_archiver::replicate_archival_metadata(
               fence.unsafe_add,
               _parent.archival_meta_stm()->manifest().get_applied_offset(),
               _parent.archival_meta_stm()->get_insync_offset());
-            batch_builder.read_write_fence(fence.read_write_fence);
+            rw_fence = fence.read_write_fence;
         }
-        batch_builder.add_segments(
+        auto error = co_await _parent.archival_meta_stm()->add_segments(
           meta,
-          checks_disabled ? cluster::segment_validated::no
-                          : cluster::segment_validated::yes);
-        if (manifest_clean_offset.has_value()) {
-            batch_builder.mark_clean(manifest_clean_offset.value());
-        }
-        batch_builder.update_highest_producer_id(highest_producer_id);
-
-        auto error = co_await batch_builder.replicate();
+          manifest_clean_offset,
+          highest_producer_id,
+          deadline,
+          _as,
+          is_validated,
+          rw_fence);
 
         if (
           error != cluster::errc::success
@@ -3684,7 +3683,9 @@ ss::future<bool> ntp_archiver::do_upload_local(
           : model::producer_id{};
     auto deadline = ss::lowres_clock::now() + _conf->manifest_upload_timeout();
 
-    auto builder = _parent.archival_meta_stm()->batch_start(deadline, _as);
+    auto is_validated = checks_disabled ? cluster::segment_validated::no
+                                        : cluster::segment_validated::yes;
+    cluster::emit_read_write_fence rw_fence = std::nullopt;
     if (!fence.unsafe_add) {
         vlog(
           archival_log.debug,
@@ -3694,15 +3695,16 @@ ss::future<bool> ntp_archiver::do_upload_local(
           fence.unsafe_add,
           _parent.archival_meta_stm()->manifest().get_applied_offset(),
           _parent.archival_meta_stm()->get_insync_offset());
-        builder.read_write_fence(fence.read_write_fence);
+        rw_fence = fence.read_write_fence;
     }
-    builder.add_segments(
+    auto error = co_await _parent.archival_meta_stm()->add_segments(
       {meta},
-      checks_disabled ? cluster::segment_validated::no
-                      : cluster::segment_validated::yes);
-    builder.update_highest_producer_id(highest_producer_id);
-
-    auto error = co_await builder.replicate();
+      std::nullopt,
+      highest_producer_id,
+      deadline,
+      _as,
+      is_validated,
+      rw_fence);
 
     if (error != cluster::errc::success && error != cluster::errc::not_leader) {
         vlog(
