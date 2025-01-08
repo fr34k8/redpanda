@@ -127,6 +127,14 @@ static bool segment_meta_matches_stats(
     return true;
 }
 
+static bool emit_read_write_fence(
+  const ss::sharded<features::feature_table>& feature_table) {
+    return !config::shard_local_cfg()
+              .cloud_storage_disable_archival_stm_rw_fence.value()
+           && feature_table.local().is_active(
+             features::feature::cloud_storage_metadata_rw_fence);
+}
+
 ntp_archiver_upload_result::ntp_archiver_upload_result(
   cloud_storage::upload_result r)
   : _result(r) {}
@@ -775,8 +783,7 @@ ss::future<> ntp_archiver::upload_until_term_change_legacy() {
             .read_write_fence = fence,
             // Only use the rw-fence if the feature is enabled which requires
             // major version upgrade.
-            .emit_rw_fence_cmd = _feature_table.local().is_active(
-              features::feature::cloud_storage_metadata_rw_fence),
+            .emit_rw_fence_cmd = emit_read_write_fence(_feature_table),
           });
         if (non_compacted_upload_result.num_failed != 0) {
             // The logic in class `remote` already does retries: if we get here,
@@ -2692,8 +2699,7 @@ ss::future<> ntp_archiver::apply_archive_retention() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .emit_rw_fence_cmd = _feature_table.local().is_active(
-        features::feature::cloud_storage_metadata_rw_fence),
+      .emit_rw_fence_cmd = emit_read_write_fence(_feature_table),
     };
 
     std::optional<size_t> retention_bytes = ntp_conf.retention_bytes();
@@ -2765,8 +2771,7 @@ ss::future<> ntp_archiver::garbage_collect_archive() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .emit_rw_fence_cmd = _feature_table.local().is_active(
-        features::feature::cloud_storage_metadata_rw_fence),
+      .emit_rw_fence_cmd = emit_read_write_fence(_feature_table),
     };
     auto backlog = co_await _manifest_view->get_retention_backlog();
     if (backlog.has_failure()) {
@@ -3217,8 +3222,7 @@ ss::future<> ntp_archiver::apply_retention() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .emit_rw_fence_cmd = _feature_table.local().is_active(
-        features::feature::cloud_storage_metadata_rw_fence),
+      .emit_rw_fence_cmd = emit_read_write_fence(_feature_table),
     };
     auto arch_so = manifest().get_archive_start_offset();
     auto stm_so = manifest().get_start_offset();
@@ -3315,8 +3319,7 @@ ss::future<> ntp_archiver::garbage_collect() {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .emit_rw_fence_cmd = _feature_table.local().is_active(
-        features::feature::cloud_storage_metadata_rw_fence),
+      .emit_rw_fence_cmd = emit_read_write_fence(_feature_table),
     };
 
     // If we are about to delete segments, we must ensure that the remote
@@ -3443,8 +3446,7 @@ ntp_archiver::find_reupload_candidate(manifest_scanner_t scanner) {
       = _parent.archival_meta_stm()->manifest().get_applied_offset(),
       // Only use the rw-fence if the feature is enabled which requires
       // major version upgrade.
-      .emit_rw_fence_cmd = _feature_table.local().is_active(
-        features::feature::cloud_storage_metadata_rw_fence),
+      .emit_rw_fence_cmd = emit_read_write_fence(_feature_table),
     };
     if (!may_begin_uploads()) {
         co_return find_reupload_candidate_result{
