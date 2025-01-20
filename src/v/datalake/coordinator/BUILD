@@ -38,9 +38,13 @@ redpanda_cc_library(
     ],
     implementation_deps = [
         "//src/v/base",
+        "//src/v/datalake:catalog_schema_manager",
         "//src/v/datalake:logger",
+        "//src/v/datalake:record_schema_resolver",
+        "//src/v/datalake:record_translator",
         "//src/v/datalake:schema_identifier",
-        "//src/v/datalake:table_creator",
+        "//src/v/datalake:table_definition",
+        "//src/v/datalake:table_id_provider",
         "//src/v/datalake:types",
         "//src/v/ssx:future_util",
         "//src/v/ssx:sleep_abortable",
@@ -163,6 +167,7 @@ redpanda_cc_library(
         ":state_update",
         "//src/v/base",
         "//src/v/container:fragmented_vector",
+        "//src/v/iceberg:table_identifier",
         "@seastar",
     ],
 )
@@ -180,7 +185,6 @@ redpanda_cc_library(
         ":state",
         "//src/v/base",
         "//src/v/datalake:logger",
-        "//src/v/datalake:table_definition",
         "//src/v/datalake:table_id_provider",
         "//src/v/iceberg:manifest_entry",
         "//src/v/iceberg:partition_key",
@@ -197,6 +201,7 @@ redpanda_cc_library(
         "//src/v/container:fragmented_vector",
         "//src/v/iceberg:catalog",
         "//src/v/iceberg:manifest_io",
+        "//src/v/iceberg:table_identifier",
         "@seastar",
     ],
 )

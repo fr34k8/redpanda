@@ -47,9 +47,11 @@ v_cc_library(
     manifest_list_avro.cc
     merge_append_action.cc
     metadata_query.cc
+    partition.cc
     partition_key.cc
     partition_key_type.cc
     partition_json.cc
+    remove_snapshots_action.cc
     rest_catalog.cc
     schema.cc
     schema_avro.cc
@@ -73,6 +75,7 @@ v_cc_library(
     values.cc
     values_avro.cc
     values_bytes.cc
+    values_json.cc
     rest_client/json.cc
     rest_client/retry_policy.cc
     rest_client/catalog_client.cc

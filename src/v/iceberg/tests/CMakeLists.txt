@@ -43,6 +43,7 @@ rp_test(
     partition_key_test.cc
     partition_key_type_test.cc
     partition_test.cc
+    remove_snapshots_action_test.cc
     schema_avro_test.cc
     schema_json_test.cc
     schema_test.cc
@@ -75,6 +76,17 @@ rp_test(
   INPUT_FILES
     "${testdata_dir}/nested_manifest.avro"
   ARGS "-- -c1"
+)
+
+rp_test(
+  UNIT_TEST
+  GTEST
+  BINARY_NAME iceberg_values_json
+  SOURCES
+    values_json_test.cc
+  LIBRARIES
+    v::gtest_main
+    v::iceberg_test_utils
 )
 
 rp_test(

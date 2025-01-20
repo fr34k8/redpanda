@@ -76,6 +76,25 @@ redpanda_cc_gtest(
 )
 
 redpanda_cc_gtest(
+    name = "values_json_test",
+    timeout = "short",
+    srcs = [
+        "values_json_test.cc",
+    ],
+    deps = [
+        ":test_schemas",
+        "//src/v/bytes:random",
+        "//src/v/iceberg:json_writer",
+        "//src/v/iceberg:values",
+        "//src/v/iceberg:values_json",
+        "//src/v/json",
+        "//src/v/test_utils:gtest",
+        "@abseil-cpp//absl/numeric:int128",
+        "@googletest//:gtest",
+    ],
+)
+
+redpanda_cc_gtest(
     name = "filesystem_catalog_test",
     timeout = "short",
     srcs = [
@@ -240,6 +259,7 @@ redpanda_cc_gtest(
         "partition_test.cc",
     ],
     deps = [
+        ":test_schemas",
         "//src/v/container:fragmented_vector",
         "//src/v/iceberg:partition",
         "//src/v/test_utils:gtest",
@@ -278,6 +298,24 @@ redpanda_cc_gtest(
         "//src/v/iceberg:partition_key_type",
         "//src/v/iceberg:schema",
         "//src/v/iceberg:transform",
+        "//src/v/test_utils:gtest",
+        "@googletest//:gtest",
+    ],
+)
+
+redpanda_cc_gtest(
+    name = "remove_snapshots_action_test",
+    timeout = "short",
+    srcs = [
+        "remove_snapshots_action_test.cc",
+    ],
+    deps = [
+        "//src/v/base",
+        "//src/v/iceberg:manifest_entry",
+        "//src/v/iceberg:remove_snapshots_action",
+        "//src/v/iceberg:table_metadata",
+        "//src/v/iceberg:transaction",
+        "//src/v/random:generators",
         "//src/v/test_utils:gtest",
         "@googletest//:gtest",
     ],

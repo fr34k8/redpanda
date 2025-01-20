@@ -41,13 +41,15 @@ public:
     coordinator(
       ss::shared_ptr<coordinator_stm> stm,
       cluster::topic_table& topics,
-      table_creator& table_creator,
+      type_resolver& type_resolver,
+      schema_manager& schema_mgr,
       remove_tombstone_f remove_tombstone,
       file_committer& file_committer,
       config::binding<std::chrono::milliseconds> commit_interval)
       : stm_(std::move(stm))
       , topic_table_(topics)
-      , table_creator_(table_creator)
+      , type_resolver_(type_resolver)
+      , schema_mgr_(schema_mgr)
       , remove_tombstone_(std::move(remove_tombstone))
       , file_committer_(file_committer)
       , commit_interval_(std::move(commit_interval)) {}
@@ -59,6 +61,9 @@ public:
       model::topic topic,
       model::revision_id topic_revision,
       record_schema_components);
+
+    ss::future<checked<std::nullopt_t, errc>> sync_ensure_dlq_table_exists(
+      model::topic topic, model::revision_id topic_revision);
 
     ss::future<checked<std::nullopt_t, errc>> sync_add_files(
       model::topic_partition tp,
@@ -95,7 +100,8 @@ private:
 
     ss::shared_ptr<coordinator_stm> stm_;
     cluster::topic_table& topic_table_;
-    table_creator& table_creator_;
+    type_resolver& type_resolver_;
+    schema_manager& schema_mgr_;
     remove_tombstone_f remove_tombstone_;
     file_committer& file_committer_;
     config::binding<std::chrono::milliseconds> commit_interval_;

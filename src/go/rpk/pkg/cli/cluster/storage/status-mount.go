@@ -10,8 +10,10 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -50,9 +52,19 @@ Status for a mount/unmount operation
 			out.MaybeDie(err, "invalid migration ID: %v", err)
 
 			var mState rpadmin.MigrationState
+			handleMigrationHTTPError := func(err error) {
+				if he := (*rpadmin.HTTPResponseError)(nil); errors.As(err, &he) {
+					if he.Response.StatusCode == http.StatusNotFound {
+						out.Exit("The mount/unmount operation %s is not found, likely completed or never started.\nRun 'rpk cluster storage list-mountable' to see mountable topics", from[0])
+					} else {
+						out.Die("unable to get the status of the mount/unmount operation: %v", err)
+					}
+				}
+			}
+
 			if p.FromCloud {
-				cl, err := createDataplaneClient(p)
-				out.MaybeDieErr(err)
+				cl, err := p.DataplaneClient()
+				out.MaybeDie(err, "unable to initialize cloud client: %v", err)
 
 				resp, err := cl.CloudStorage.GetMountTask(
 					cmd.Context(),
@@ -62,7 +74,7 @@ Status for a mount/unmount operation
 						},
 					),
 				)
-				out.MaybeDie(err, "unable to get the status of mount/unmount operation: %v", err)
+				handleMigrationHTTPError(err)
 				if resp != nil {
 					mState = mountTaskToAdminMigrationState(resp.Msg)
 				}
@@ -71,7 +83,7 @@ Status for a mount/unmount operation
 				out.MaybeDie(err, "unable to initialize admin client: %v", err)
 
 				mState, err = adm.GetMigration(cmd.Context(), migrationID)
-				out.MaybeDie(err, "unable to get the status of the migration: %v", err)
+				handleMigrationHTTPError(err)
 			}
 			outStatus := migrationState{
 				ID:            mState.ID,

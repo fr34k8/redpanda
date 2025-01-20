@@ -138,6 +138,28 @@ redpanda_test_cc_library(
     ],
 )
 
+redpanda_test_cc_library(
+    name = "test_utils",
+    srcs = [
+        "test_utils.cc",
+    ],
+    hdrs = [
+        "test_utils.h",
+    ],
+    implementation_deps = [
+        "//src/v/datalake:record_translator",
+        "//src/v/datalake:table_definition",
+        "//src/v/datalake:table_id_provider",
+    ],
+    include_prefix = "datalake/tests",
+    visibility = [":__subpackages__"],
+    deps = [
+        "//src/v/datalake:catalog_schema_manager",
+        "//src/v/datalake:record_schema_resolver",
+        "//src/v/datalake:table_creator",
+    ],
+)
+
 redpanda_cc_gtest(
     name = "catalog_schema_manager_test",
     timeout = "short",
@@ -218,12 +240,13 @@ redpanda_cc_gtest(
         ":catalog_and_registry_fixture",
         ":record_generator",
         ":test_data_writer",
+        ":test_utils",
         "//src/v/datalake:catalog_schema_manager",
         "//src/v/datalake:record_multiplexer",
         "//src/v/datalake:record_schema_resolver",
         "//src/v/datalake:record_translator",
-        "//src/v/datalake:table_creator",
         "//src/v/datalake:table_definition",
+        "//src/v/datalake:table_id_provider",
         "//src/v/iceberg:filesystem_catalog",
         "//src/v/model",
         "//src/v/pandaproxy",
@@ -363,6 +386,7 @@ redpanda_cc_bench(
         ":catalog_and_registry_fixture",
         ":record_generator",
         ":test_data_writer",
+        ":test_utils",
         "//src/v/container:fragmented_vector",
         "//src/v/datalake:catalog_schema_manager",
         "//src/v/datalake:record_multiplexer",

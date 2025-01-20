@@ -195,6 +195,29 @@ redpanda_cc_library(
 )
 
 redpanda_cc_library(
+    name = "values_json",
+    srcs = [
+        "values_json.cc",
+    ],
+    hdrs = [
+        "values_json.h",
+    ],
+    include_prefix = "iceberg",
+    deps = [
+        ":datatypes",
+        ":json_utils",
+        ":json_writer",
+        ":values",
+        "//src/v/json",
+        "//src/v/strings:string_switch",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/time",
+        "@boost//:iostreams",
+        "@boost//:range",
+    ],
+)
+
+redpanda_cc_library(
     name = "field_collecting_visitor",
     hdrs = [
         "field_collecting_visitor.h",
@@ -479,6 +502,9 @@ redpanda_cc_library(
 
 redpanda_cc_library(
     name = "partition",
+    srcs = [
+        "partition.cc",
+    ],
     hdrs = [
         "partition.h",
     ],
@@ -561,6 +587,32 @@ redpanda_cc_library(
     deps = [
         "//src/v/base",
         "@seastar",
+    ],
+)
+
+redpanda_cc_library(
+    name = "remove_snapshots_action",
+    srcs = [
+        "remove_snapshots_action.cc",
+    ],
+    hdrs = [
+        "remove_snapshots_action.h",
+    ],
+    implementation_deps = [
+        ":logger",
+        ":snapshot",
+        ":table_update",
+        "//src/v/base",
+        "//src/v/container:chunked_hash_map",
+    ],
+    include_prefix = "iceberg",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":action",
+        ":table_metadata",
+        "//src/v/container:fragmented_vector",
+        "//src/v/model",
+        "//src/v/utils:prefix_logger",
     ],
 )
 
@@ -913,6 +965,7 @@ redpanda_cc_library(
         "transaction.h",
     ],
     implementation_deps = [
+        ":remove_snapshots_action",
         ":table_update_applier",
         ":update_schema_action",
     ],
@@ -939,6 +992,9 @@ redpanda_cc_library(
     ],
     hdrs = [
         "transform.h",
+    ],
+    implementation_deps = [
+        "@fmt",
     ],
     include_prefix = "iceberg",
     visibility = ["//visibility:public"],
